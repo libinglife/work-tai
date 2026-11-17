@@ -1,5 +1,6 @@
 import type { DailyChecks, DomainId, Notes, SectionId, ShelfMark, StudyTrack, Task, TaskDomain } from './types'
-import { BOOKS, CHECKS, COURSES, PROJECTS } from './catalog'
+import { CHECKS } from './catalog'
+import { COURSES } from './studyCourses'
 import { todayKey } from './format'
 
 const TASKS_KEY = 'worktai.tasks.v1'
@@ -182,11 +183,12 @@ export type LibraryMarks = {
 
 const MARKS: ShelfMark[] = ['idle', 'active', 'done']
 
-function readMarks(value: unknown, ids: string[]): Record<string, ShelfMark> {
+function readMarks(value: unknown, ids?: string[]): Record<string, ShelfMark> {
   const marks: Record<string, ShelfMark> = {}
   if (!value || typeof value !== 'object') return marks
   for (const [id, mark] of Object.entries(value)) {
-    if (!ids.includes(id) || mark === 'idle' || !MARKS.includes(mark as ShelfMark)) continue
+    if (ids && !ids.includes(id)) continue
+    if (mark === 'idle' || !MARKS.includes(mark as ShelfMark)) continue
     marks[id] = mark as ShelfMark
   }
   return marks
@@ -196,8 +198,8 @@ export function readLibrary(): LibraryMarks {
   const value = readJson(LIBRARY_KEY)
   const saved = value && typeof value === 'object' ? (value as { books?: unknown; projects?: unknown }) : {}
   return {
-    books: readMarks(saved.books, BOOKS.map((book) => book.id)),
-    projects: readMarks(saved.projects, PROJECTS.map((project) => project.id)),
+    books: readMarks(saved.books),
+    projects: readMarks(saved.projects),
   }
 }
 

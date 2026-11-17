@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { BOOKS, PROJECTS, SHELVES } from '../catalog'
+import { BOOKS, PROJECTS, SHELVES } from '../libraryCatalog'
 import { matches } from '../format'
 import { readLibrary, writeLibrary, type LibraryMarks } from '../storage'
 import type { ShelfId, ShelfMark } from '../types'

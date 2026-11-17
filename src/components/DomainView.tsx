@@ -1,7 +1,8 @@
-import { domainById, type SeriesStage } from '../catalog'
-import { formatTime, matches } from '../format'
-import type { DomainId, Signal, Task, TaskDomain } from '../types'
+import { domainById } from '../catalog'
+import { formatTime } from '../format'
 import { signalsFor } from '../signals'
+import type { DiscoverItem, DomainId, Signal, Task, TaskDomain } from '../types'
+import { DiscoverPanel } from './DiscoverPanel'
 import { SignalList } from './SignalList'
 import { TaskList } from './TaskList'
 
@@ -11,6 +12,12 @@ type Props = {
   notes: string
   query: string
   signals: Signal[]
+  discover: DiscoverItem[]
+  discoverStatus: 'loading' | 'ready' | 'error'
+  discoverError: string
+  discoverStale: boolean
+  discoverFetchedAt: number | null
+  onDiscoverRefresh: () => void
   status: 'loading' | 'ready' | 'error'
   error: string
   stale: boolean
@@ -29,6 +36,12 @@ export function DomainView({
   notes,
   query,
   signals,
+  discover,
+  discoverStatus,
+  discoverError,
+  discoverStale,
+  discoverFetchedAt,
+  onDiscoverRefresh,
   status,
   error,
   stale,
@@ -42,133 +55,73 @@ export function DomainView({
 }: Props) {
   const domain = domainById(domainId)
   const items = signalsFor(signals, domainId).slice(0, 8)
-  const stages = (domain.series ?? [])
-    .map((stage, index) => ({
-      ...stage,
-      order: index + 1,
-      points: stage.points.filter((point) => matches(query, stage.title, stage.aim, point)),
-    }))
-    .filter((stage) => stage.points.length > 0 || matches(query, stage.title, stage.aim))
 
   return (
     <>
-    {domain.series ? <SeriesPanel stages={stages} /> : null}
-    <div className="domain">
-      <section className="panel">
-        <div className="panel-head">
-          <h2>信号</h2>
-          <button type="button" className="text-btn" onClick={onRefresh}>
-            {status === 'loading' ? '读取中' : '重新拉取'}
-          </button>
-        </div>
-        <p className="meta source-line">
-          来源 Hacker News 热帖，按标题关键词归入{domain.label}
-          {fetchedAt ? ` · ${formatTime(new Date(fetchedAt))}` : ''}
-          {stale ? ' · 显示上次结果，刚刚刷新失败' : ''}
-        </p>
-        {status === 'loading' && items.length === 0 ? <p className="empty">正在读取热帖</p> : null}
-        {status === 'error' ? (
-          <p className="empty">
-            {error}{' '}
+      <DiscoverPanel
+        title="推荐"
+        sourceLine="B站 / YouTube 按播放量优先，与 GitHub 仓库交错展示，约 6 小时缓存"
+        items={discover}
+        query={query}
+        status={discoverStatus}
+        error={discoverError}
+        stale={discoverStale}
+        fetchedAt={discoverFetchedAt}
+        empty="没有符合的推荐。清空过滤、重新拉取，或稍后再试。"
+        onRefresh={onDiscoverRefresh}
+      />
+      <p className="meta domain-brief">{domain.brief}</p>
+      <div className="domain">
+        <section className="panel">
+          <div className="panel-head">
+            <h2>信号</h2>
             <button type="button" className="text-btn" onClick={onRefresh}>
-              重试
+              {status === 'loading' ? '读取中' : '重新拉取'}
             </button>
+          </div>
+          <p className="meta source-line">
+            来源 Hacker News 热帖，按标题关键词归入{domain.label}
+            {fetchedAt ? ` · ${formatTime(new Date(fetchedAt))}` : ''}
+            {stale ? ' · 显示上次结果，刚刚刷新失败' : ''}
           </p>
-        ) : null}
-        {status === 'loading' && items.length === 0 ? null : (
-          <SignalList
-            items={items}
+          {status === 'loading' && items.length === 0 ? <p className="empty">正在读取热帖</p> : null}
+          {status === 'error' ? (
+            <p className="empty">
+              {error}{' '}
+              <button type="button" className="text-btn" onClick={onRefresh}>
+                重试
+              </button>
+            </p>
+          ) : null}
+          {status === 'loading' && items.length === 0 ? null : (
+            <SignalList
+              items={items}
+              query={query}
+              empty="这批热帖里没有对上这个方向的标题。推荐与速记仍然可用。"
+            />
+          )}
+        </section>
+        <div className="stack">
+          <TaskList
+            tasks={tasks}
+            domain={domainId}
             query={query}
-            empty={
-              domain.series
-                ? '这批热帖里没有对上全栈的标题。系列和入口仍然可用。'
-                : '这批热帖里没有对上这个方向的标题。入口和本周关注仍然可用。'
-            }
+            onAdd={onAdd}
+            onToggle={onToggle}
+            onRemove={onRemove}
+            onClearDone={onClearDone}
           />
-        )}
-      </section>
-      <div className="stack">
-        <section className="panel">
-          <h2>本周关注</h2>
-          {domain.practices.filter((item) => matches(query, item)).length === 0 ? (
-            <p className="empty">没有符合的关注点。</p>
-          ) : (
-            <ul className="practice-list">
-              {domain.practices
-                .filter((item) => matches(query, item))
-                .map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-            </ul>
-          )}
-        </section>
-        <section className="panel">
-          <h2>入口</h2>
-          {domain.links.filter((link) => matches(query, link.label, link.note)).length === 0 ? (
-            <p className="empty">没有符合的入口。</p>
-          ) : (
-            <ul className="link-list">
-              {domain.links
-                .filter((link) => matches(query, link.label, link.note))
-                .map((link) => (
-                  <li key={link.href}>
-                    <a href={link.href} target="_blank" rel="noreferrer">
-                      {link.label}
-                    </a>
-                    <span>{link.note}</span>
-                  </li>
-                ))}
-            </ul>
-          )}
-        </section>
-        <TaskList
-          tasks={tasks}
-          domain={domainId}
-          query={query}
-          onAdd={onAdd}
-          onToggle={onToggle}
-          onRemove={onRemove}
-          onClearDone={onClearDone}
-        />
-        <section className="panel">
-          <h2>速记</h2>
-          <textarea
-            value={notes}
-            placeholder={domain.noteHint}
-            aria-label={`${domain.label}速记`}
-            onChange={(event) => onNotes(event.target.value)}
-          />
-        </section>
+          <section className="panel">
+            <h2>速记</h2>
+            <textarea
+              value={notes}
+              placeholder={domain.noteHint}
+              aria-label={`${domain.label}速记`}
+              onChange={(event) => onNotes(event.target.value)}
+            />
+          </section>
+        </div>
       </div>
-    </div>
     </>
-  )
-}
-
-function SeriesPanel({ stages }: { stages: Array<SeriesStage & { order: number }> }) {
-  return (
-    <section className="panel series-panel">
-      <h2>全栈系列</h2>
-      {stages.length === 0 ? (
-        <p className="empty">没有符合的一层。</p>
-      ) : (
-        <ol className="series">
-          {stages.map((stage) => (
-            <li key={stage.id}>
-              <p className="series-index">{stage.order}</p>
-              <div>
-                <h3>{stage.title}</h3>
-                <p className="why">{stage.aim}</p>
-                <ul>
-                  {stage.points.map((point) => (
-                    <li key={point}>{point}</li>
-                  ))}
-                </ul>
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
-    </section>
   )
 }

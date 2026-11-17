@@ -1,9 +1,17 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { DOMAINS } from '../catalog'
 import { dayOfYear, matches } from '../format'
-import type { DomainId, SectionId, Signal, Task, TaskDomain } from '../types'
+import { formatHolidayRemaining, holidayCountdown } from '../holidays'
+import type { DiscoverItem, DiscoverSource, DomainId, SectionId, Signal, Task, TaskDomain } from '../types'
 import { signalsFor } from '../signals'
 import { FocusPanel } from './FocusPanel'
+
+type HotRow = {
+  id: string
+  title: string
+  url: string
+  badge: string
+}
 
 type Props = {
   intention: string
@@ -11,12 +19,21 @@ type Props = {
   tasks: Task[]
   query: string
   signals: Signal[]
-  status: 'loading' | 'ready' | 'error'
-  error: string
+  picksByDomain: Record<DomainId, DiscoverItem[]>
+  signalStatus: 'loading' | 'ready' | 'error'
+  signalError: string
+  discoverStatus: 'loading' | 'ready' | 'error'
+  discoverError: string
   clock: Date
   onOpen: (id: Exclude<SectionId, 'today'>) => void
   onAdd: (title: string, domain: TaskDomain) => void
   onToggle: (id: string) => void
+}
+
+const SOURCE_BADGE: Record<DiscoverSource, string> = {
+  github: 'GH',
+  youtube: 'YT',
+  bilibili: 'B站',
 }
 
 export function TodayView({
@@ -25,8 +42,11 @@ export function TodayView({
   tasks,
   query,
   signals,
-  status,
-  error,
+  picksByDomain,
+  signalStatus,
+  signalError,
+  discoverStatus,
+  discoverError,
   clock,
   onOpen,
   onAdd,
@@ -36,9 +56,21 @@ export function TodayView({
   const [draft, setDraft] = useState('')
   const openTasks = tasks.filter((task) => !task.done)
   const visibleTasks = openTasks.filter((task) => matches(query, task.title)).slice(0, 3)
-  const feed = signalsFor(signals, tab)
-    .filter((item) => matches(query, item.title))
-    .slice(0, 8)
+
+  const feed = useMemo(
+    () => buildHotFeed(tab, signals, picksByDomain[tab] ?? [], query),
+    [tab, signals, picksByDomain, query],
+  )
+
+  const hotLoading =
+    feed.length === 0 && (discoverStatus === 'loading' || (signalStatus === 'loading' && signals.length === 0))
+  const hotError =
+    feed.length === 0 && discoverStatus === 'error' && signalStatus === 'error'
+      ? [discoverError, signalError].filter(Boolean).join(' ')
+      : ''
+
+  const holiday = holidayCountdown(clock)
+  const holidayText = formatHolidayRemaining(clock, holiday)
 
   return (
     <div className="home">
@@ -58,7 +90,8 @@ export function TodayView({
         </article>
 
         <article className="widget hot">
-          <div className="hot-tabs" role="tablist" aria-label="信号分类">
+          <p className="widget-kicker hot-kicker">当日热点</p>
+          <div className="hot-tabs" role="tablist" aria-label="热点分类">
             {DOMAINS.map((domain) => (
               <button
                 key={domain.id}
@@ -71,19 +104,20 @@ export function TodayView({
               </button>
             ))}
           </div>
-          {status === 'loading' && feed.length === 0 ? <p className="empty">正在读取热帖</p> : null}
-          {status === 'error' ? <p className="empty">{error}</p> : null}
-          {status !== 'loading' && feed.length === 0 ? (
-            <p className="empty">这批标题里没有{DOMAINS.find((item) => item.id === tab)?.label}。</p>
+          <p className="meta hot-source">GitHub / B站 / YouTube 推荐为主，HN 热帖补足</p>
+          {hotLoading ? <p className="empty">正在拉取热点</p> : null}
+          {hotError ? <p className="empty">{hotError}</p> : null}
+          {!hotLoading && feed.length === 0 ? (
+            <p className="empty">暂无{DOMAINS.find((item) => item.id === tab)?.label}热点。推荐拉取完成后会自动出现。</p>
           ) : null}
           <ol className="hot-list">
             {feed.map((item, index) => (
               <li key={item.id}>
                 <span className="rank">{index + 1}</span>
-                <a href={item.url} target="_blank" rel="noreferrer">
+                <a href={item.url} target="_blank" rel="noreferrer" title={item.title}>
                   {item.title}
                 </a>
-                <span className="score">{item.score}</span>
+                <span className="score">{item.badge}</span>
               </li>
             ))}
           </ol>
@@ -97,25 +131,49 @@ export function TodayView({
           <p>{clock.getFullYear()}</p>
           <p className="cal-day">{clock.getDate()}</p>
           <p>第 {dayOfYear(clock)} 天</p>
+          <hr className="cal-divider" aria-hidden="true" />
+          <p className="cal-holiday-head">{holidayText.headline}</p>
+          <p className="cal-holiday-time" aria-live="polite">
+            {holidayText.detail}
+          </p>
         </article>
       </section>
 
       <section className="groups" aria-label="常用入口">
-        {DOMAINS.map((domain) => (
-          <div key={domain.id} className="group">
-            <div className="group-tiles">
-              {domain.links.map((link) => (
-                <a key={link.href} className="tile-link" href={link.href} target="_blank" rel="noreferrer">
-                  <span className="tile" style={{ background: link.tint }}>
-                    {link.mark}
-                  </span>
-                  <span>{link.label}</span>
-                </a>
-              ))}
+        {DOMAINS.map((domain) => {
+          const picks = (picksByDomain[domain.id] ?? []).slice(0, 4)
+          return (
+            <div key={domain.id} className="group">
+              <div className="group-tiles">
+                {picks.length === 0 ? (
+                  <button type="button" className="tile-link" onClick={() => onOpen(domain.id)}>
+                    <span className="tile" style={{ background: '#64748b' }}>
+                      {domain.code}
+                    </span>
+                    <span>打开</span>
+                  </button>
+                ) : (
+                  picks.map((item) => (
+                    <a
+                      key={item.id}
+                      className="tile-link"
+                      href={item.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={item.title}
+                    >
+                      <span className="tile" style={{ background: tileTint(item.source) }}>
+                        {tileMark(item)}
+                      </span>
+                      <span>{shortTitle(item.title)}</span>
+                    </a>
+                  ))
+                )}
+              </div>
+              <p className="group-name">{domain.label}</p>
             </div>
-            <p className="group-name">{domain.label}</p>
-          </div>
-        ))}
+          )
+        })}
 
         <div className="group">
           <form
@@ -153,9 +211,9 @@ export function TodayView({
           <div className="group-tiles">
             <button type="button" className="tile-link" onClick={() => onOpen('tools')}>
               <span className="tile" style={{ background: '#334155' }}>
-                命令
+                工具
               </span>
-              <span>命令</span>
+              <span>工具</span>
             </button>
             <button type="button" className="tile-link" onClick={() => onOpen('focus')}>
               <span className="tile" style={{ background: '#0f766e' }}>
@@ -187,4 +245,55 @@ export function TodayView({
       </section>
     </div>
   )
+}
+
+function buildHotFeed(
+  tab: DomainId,
+  signals: Signal[],
+  picks: DiscoverItem[],
+  query: string,
+): HotRow[] {
+  const sortedPicks = [...picks]
+    .filter((item) => matches(query, item.title, item.summary, item.metric))
+    .sort((a, b) => {
+      const rank = (s: DiscoverItem['source']) => (s === 'bilibili' || s === 'youtube' ? 1 : 0)
+      return rank(b.source) - rank(a.source) || (b.hotScore ?? 0) - (a.hotScore ?? 0)
+    })
+
+  const fromDiscover: HotRow[] = sortedPicks.slice(0, 6).map((item) => ({
+      id: item.id,
+      title: item.title,
+      url: item.url,
+      badge: SOURCE_BADGE[item.source],
+    }))
+
+  const hn = signalsFor(signals, tab)
+    .filter((item) => matches(query, item.title))
+    .slice(0, 8 - fromDiscover.length)
+    .map((item) => ({
+      id: `hn-${item.id}`,
+      title: item.title,
+      url: item.url,
+      badge: `HN ${item.score}`,
+    }))
+
+  return [...fromDiscover, ...hn].slice(0, 8)
+}
+
+function tileTint(source: DiscoverSource) {
+  if (source === 'github') return '#24292f'
+  if (source === 'youtube') return '#c4302b'
+  return '#00a1d6'
+}
+
+function tileMark(item: DiscoverItem) {
+  if (item.source === 'github') return 'GH'
+  if (item.source === 'youtube') return 'YT'
+  return 'B'
+}
+
+function shortTitle(title: string) {
+  const compact = title.replace(/\s+/g, ' ').trim()
+  if (compact.length <= 8) return compact
+  return `${compact.slice(0, 7)}…`
 }

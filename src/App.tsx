@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { SECTIONS, sectionById } from './catalog'
 import { formatBoardDate, formatTime } from './format'
+import { discoverForScope, loadDiscover } from './discover'
 import { loadSignals } from './signals'
 import {
   readIntention,
@@ -12,7 +13,7 @@ import {
   writeSection,
   writeTasks,
 } from './storage'
-import type { DomainId, Notes, SectionId, Signal, Task, TaskDomain } from './types'
+import type { DiscoverBundle, DomainId, Notes, SectionId, Signal, Task, TaskDomain } from './types'
 import { DomainView } from './components/DomainView'
 import { FocusPanel } from './components/FocusPanel'
 import { RailIcon } from './components/RailIcon'
@@ -34,6 +35,11 @@ export function App() {
   const [error, setError] = useState('')
   const [stale, setStale] = useState(false)
   const [fetchedAt, setFetchedAt] = useState<number | null>(null)
+  const [discoverBundle, setDiscoverBundle] = useState<DiscoverBundle | null>(null)
+  const [discoverStatus, setDiscoverStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [discoverError, setDiscoverError] = useState('')
+  const [discoverStale, setDiscoverStale] = useState(false)
+  const [discoverFetchedAt, setDiscoverFetchedAt] = useState<number | null>(null)
   const [clock, setClock] = useState(() => new Date())
   const searchRef = useRef<HTMLInputElement>(null)
   const current = sectionById(section)
@@ -51,6 +57,7 @@ export function App() {
   useEffect(() => {
     const controller = new AbortController()
     void refresh(false, controller.signal)
+    void refreshDiscover(false, controller.signal)
     return () => controller.abort()
   }, [])
 
@@ -84,7 +91,7 @@ export function App() {
     const timeout = window.setTimeout(() => {
       if (settled || signal?.aborted) return
       setStatus('error')
-      setError('热帖读取超时。本周关注和入口仍可使用。')
+      setError('热帖读取超时。推荐与速记仍可使用。')
     }, 12000)
     try {
       const feed = await loadSignals(force, signal)
@@ -99,11 +106,11 @@ export function App() {
       settled = true
       setStatus('error')
       if (caught instanceof TypeError) {
-        setError('当前网络读不到 Hacker News。本周关注和入口仍可使用。')
+        setError('当前网络读不到 Hacker News。推荐与速记仍可使用。')
       } else if (caught instanceof Error && caught.message) {
         setError(caught.message)
       } else {
-        setError('热帖没有读到。本周关注和入口仍可使用。')
+        setError('热帖没有读到。推荐与速记仍可使用。')
       }
     } finally {
       window.clearTimeout(timeout)
@@ -133,19 +140,57 @@ export function App() {
     )
   }
 
+  async function refreshDiscover(force: boolean, signal?: AbortSignal) {
+    setDiscoverStatus('loading')
+    setDiscoverError('')
+    let settled = false
+    const timeout = window.setTimeout(() => {
+      if (settled || signal?.aborted) return
+      setDiscoverStatus('error')
+      setDiscoverError('推荐拉取超时。可点「重新拉取」重试。')
+    }, 90000)
+    try {
+      const bundle = await loadDiscover(force, signal)
+      if (signal?.aborted) return
+      settled = true
+      setDiscoverBundle(bundle)
+      setDiscoverFetchedAt(bundle.fetchedAt)
+      setDiscoverStale(bundle.stale)
+      setDiscoverStatus('ready')
+    } catch (caught) {
+      if (signal?.aborted || (caught instanceof DOMException && caught.name === 'AbortError')) return
+      settled = true
+      setDiscoverStatus('error')
+      if (caught instanceof TypeError) {
+        setDiscoverError('网络读不到 GitHub / 视频源。稍后再试或部署时配置 B 站代理。')
+      } else if (caught instanceof Error && caught.message) {
+        setDiscoverError(caught.message)
+      } else {
+        setDiscoverError('推荐没有拉到。')
+      }
+    } finally {
+      window.clearTimeout(timeout)
+    }
+  }
+
+  const picksByDomain = Object.fromEntries(
+    DOMAIN_IDS.map((id) => [id, discoverForScope(discoverBundle, id)]),
+  ) as Record<DomainId, ReturnType<typeof discoverForScope>>
+
   return (
     <div className="shell">
       <a className="skip" href="#desk">
         跳到内容
       </a>
-      <aside className="rail">
+      <aside className="rail" aria-label="分区导航">
         <nav className="rail-nav" aria-label="分区">
           {SECTIONS.map((item) => (
             <button
               key={item.id}
               type="button"
               className="rail-btn"
-              title={`按 ${item.key} 切换`}
+              title={`${item.label}（按 ${item.key}）`}
+              aria-keyshortcuts={item.key}
               aria-current={item.id === section ? 'page' : undefined}
               onClick={() => setSection(item.id)}
             >
@@ -165,6 +210,7 @@ export function App() {
             <form
               className="search-pill"
               role="search"
+              aria-describedby="desk-search-hint"
               onSubmit={(event) => {
                 event.preventDefault()
                 searchRef.current?.blur()
@@ -181,23 +227,36 @@ export function App() {
                 id="desk-search"
                 ref={searchRef}
                 value={query}
-                placeholder="过滤任务、信号、题目"
+                placeholder="键入以过滤列表与卡片"
+                autoComplete="off"
+                spellCheck={false}
                 onChange={(event) => setQuery(event.target.value)}
               />
               {query ? (
-                <button type="button" className="search-go" onClick={() => setQuery('')}>
+                <button type="button" className="search-clear" onClick={() => setQuery('')}>
                   清除
                 </button>
               ) : (
-                <button type="submit" className="search-go">
-                  搜索
-                </button>
+                <span className="search-trail" aria-hidden="true">
+                  <kbd className="kbd">/</kbd>
+                </span>
               )}
             </form>
-            <div className="quick">
+            <p id="desk-search-hint" className="search-meta">
+              <kbd className="kbd">1</kbd>–<kbd className="kbd">9</kbd> 切换分区 · <kbd className="kbd">/</kbd> 聚焦过滤 ·{' '}
+              <kbd className="kbd">Esc</kbd> 清除
+            </p>
+            <div className="quick" role="navigation" aria-label="快速进入分区">
               {SECTIONS.filter((item) => item.id !== 'today').map((item) => (
-                <button key={item.id} type="button" onClick={() => setSection(item.id)}>
-                  {item.label}
+                <button
+                  key={item.id}
+                  type="button"
+                  className="quick-chip"
+                  aria-keyshortcuts={item.key}
+                  aria-current={item.id === section ? 'true' : undefined}
+                  onClick={() => setSection(item.id)}
+                >
+                  <span className="quick-label">{item.label}</span>
                 </button>
               ))}
             </div>
@@ -205,23 +264,42 @@ export function App() {
         </header>
 
         {section === 'today' ? (
+          <>
+            <header className="section-intro section-intro--today" aria-label="今日说明">
+              <div>
+                <p className="section-eyebrow">今日</p>
+                <h1 className="section-title">先写一件事，再扫四个方向</h1>
+                <p className="section-lede">{current.subtitle}</p>
+              </div>
+              <p className="section-note">
+                清单和计时在这台浏览器里；热帖来自 Hacker News，推荐来自 GitHub / YouTube / B站，约 6 小时缓存。
+              </p>
+            </header>
           <TodayView
             intention={intention}
             onIntention={setIntention}
             tasks={tasks}
             query={query}
             signals={signals}
-            status={status}
-            error={error}
+            picksByDomain={picksByDomain}
+            signalStatus={status}
+            signalError={error}
+            discoverStatus={discoverStatus}
+            discoverError={discoverError}
             clock={clock}
             onOpen={setSection}
             onAdd={addTask}
             onToggle={toggleTask}
           />
+          </>
         ) : (
           <div className="stage">
-            <h1>{current.label}</h1>
-            <p className="sub">{current.subtitle}</p>
+            <header className="section-intro">
+              <div>
+                <h1 className="section-title">{current.label}</h1>
+                <p className="section-lede">{current.subtitle}</p>
+              </div>
+            </header>
 
         {DOMAIN_IDS.includes(section as DomainId) ? (
           <DomainView
@@ -230,6 +308,12 @@ export function App() {
             notes={notes[section as DomainId]}
             query={query}
             signals={signals}
+            discover={discoverForScope(discoverBundle, section as DomainId)}
+            discoverStatus={discoverStatus}
+            discoverError={discoverError}
+            discoverStale={discoverStale}
+            discoverFetchedAt={discoverFetchedAt}
+            onDiscoverRefresh={() => void refreshDiscover(true)}
             status={status}
             error={error}
             stale={stale}
@@ -245,7 +329,17 @@ export function App() {
 
         {section === 'library' ? <LibraryView query={query} /> : null}
         {section === 'study' ? <StudyView query={query} /> : null}
-        {section === 'tools' ? <ToolsView query={query} /> : null}
+        {section === 'tools' ? (
+          <ToolsView
+            query={query}
+            items={discoverForScope(discoverBundle, 'tools')}
+            discoverStatus={discoverStatus}
+            discoverError={discoverError}
+            discoverStale={discoverStale}
+            discoverFetchedAt={discoverFetchedAt}
+            onDiscoverRefresh={() => void refreshDiscover(true)}
+          />
+        ) : null}
         {section === 'focus' ? (
             <div className="focus-page">
               <FocusPanel />

@@ -44,6 +44,30 @@ export type SignalFeed = {
   items: Signal[]
 }
 
+export type DiscoverSource = 'github' | 'youtube' | 'bilibili'
+
+export type DiscoverScope = DomainId | 'tools'
+
+export type DiscoverItem = {
+  id: string
+  title: string
+  url: string
+  source: DiscoverSource
+  summary: string
+  metric: string
+  scope: DiscoverScope
+  thumb?: string
+  publishedAt?: number
+  /** 播放或热度，用于混排时优先展示视频 */
+  hotScore?: number
+}
+
+export type DiscoverBundle = {
+  fetchedAt: number
+  stale: boolean
+  byScope: Partial<Record<DiscoverScope, DiscoverItem[]>>
+}
+
 export type Notes = Record<DomainId, string>
 
 export type DailyChecks = {

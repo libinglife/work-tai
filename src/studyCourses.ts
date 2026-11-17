@@ -1,0 +1,145 @@
+import type { StudyTrack } from './types'
+
+export type Course = {
+  id: string
+  title: string
+  who: string
+  why: string
+  track: Exclude<StudyTrack, 'other'>
+  platform: 'B站' | 'YouTube' | 'MIT' | '文档'
+  href: string
+  plays: string
+}
+
+export const COURSES: Course[] = [
+  {
+    id: 'infispace-agent',
+    title: 'AI Agent 转型手册',
+    who: 'InfiSpace',
+    why: '后端 / 前端转 Agent 的系统路线：原理、框架、工作流、工程化与 81 道面试追问链。',
+    track: 'ai',
+    platform: '文档',
+    href: 'https://joashchn.github.io/infispace-course/index.html',
+    plays: '113 篇文档 · 107 万字 · 站点内全文检索',
+  },
+  {
+    id: 'karpathy',
+    title: 'Neural Networks: Zero to Hero',
+    who: 'Andrej Karpathy',
+    why: '从手写反向传播做到一个小 GPT。官方播放列表。',
+    track: 'ai',
+    platform: 'YouTube',
+    href: 'https://www.youtube.com/playlist?list=PLAqhIrjkxbuWI23v9cThsA9GvCAUhRvKZ',
+    plays: '官方列表，单集长期高播放',
+  },
+  {
+    id: '3b1b',
+    title: '神经网络到底是什么',
+    who: '3Blue1Brown',
+    why: '用一张手写数字看清一层网络在算什么。',
+    track: 'ai',
+    platform: 'YouTube',
+    href: 'https://www.youtube.com/watch?v=aircAruvnKk',
+    plays: '系列入门集，长期高播放',
+  },
+  {
+    id: 'limu',
+    title: '动手学深度学习',
+    who: '李沐',
+    why: '课和代码在一起，从多层网络讲到注意力。',
+    track: 'ai',
+    platform: 'B站',
+    href: 'https://www.bilibili.com/video/BV18h411r7Z7/',
+    plays: '公开页约 53 万播放',
+  },
+  {
+    id: 'hylee',
+    title: '生成式 AI 导论',
+    who: '李宏毅',
+    why: '从模型能做什么，讲到你自己怎么把它用起来。',
+    track: 'ai',
+    platform: 'B站',
+    href: 'https://www.bilibili.com/video/BV1XS411w7qr/',
+    plays: '公开页约 31 万播放',
+  },
+  {
+    id: 'atguigu-react',
+    title: 'React 教程',
+    who: '尚硅谷',
+    why: '全栈先把界面这一层学扎实：组件、请求和路由。',
+    track: 'fullstack',
+    platform: 'B站',
+    href: 'https://www.bilibili.com/video/BV1wy4y1D7JT/',
+    plays: '公开页约 428 万播放',
+  },
+  {
+    id: 'fcc-fullstack',
+    title: 'Full Stack Developer Certificate',
+    who: 'freeCodeCamp',
+    why: '从页面做到接口和数据的一整条证书路径。',
+    track: 'fullstack',
+    platform: 'YouTube',
+    href: 'https://www.youtube.com/playlist?list=PLHdCowjFIBmLn8RjqjQu_iWJI7j1iOHbU',
+    plays: '官方播放列表',
+  },
+  {
+    id: 'winston',
+    title: 'How to Speak',
+    who: 'Patrick Winston',
+    why: '一小时讲清怎么准备、怎么讲、哪里会讲砸。',
+    track: 'speech',
+    platform: 'MIT',
+    href: 'https://learn.mit.edu/video-playlist/7644/how-to-speak-by-patrick-winston',
+    plays: 'MIT 公开课',
+  },
+  {
+    id: 'winston-bili',
+    title: '如何说话',
+    who: 'Patrick Winston',
+    why: '同一堂课，方便在 B 站看。',
+    track: 'speech',
+    platform: 'B站',
+    href: 'https://www.bilibili.com/video/BV1Cu4m1u7dY/',
+    plays: 'MIT 课的公开搬运',
+  },
+  {
+    id: 'liuyuanyuan',
+    title: '演讲快速精通教程',
+    who: '刘媛媛',
+    why: '结构、脱稿、即兴，以及上台前的紧张。',
+    track: 'speech',
+    platform: 'B站',
+    href: 'https://www.bilibili.com/video/BV1Jt421K7Vq/',
+    plays: '31 讲公开课',
+  },
+  {
+    id: 'sikun',
+    title: '321 表达法',
+    who: '寺昆',
+    why: '汇报、面试和会上怎么把一件事说完。',
+    track: 'speech',
+    platform: 'B站',
+    href: 'https://www.bilibili.com/video/BV1G7411v7ss/',
+    plays: '职场表达公开课',
+  },
+  {
+    id: 'tangzhi',
+    title: '关于说话的一切',
+    who: '汤质',
+    why: '把紧张、把话说清楚、把回应练开。打开后可能要购买。',
+    track: 'speech',
+    platform: 'B站',
+    href: 'https://www.bilibili.com/cheese/play/ep34835',
+    plays: '公开页约 356 万播放',
+  },
+  {
+    id: 'charisma',
+    title: '对话和社交',
+    who: 'Charisma on Command',
+    why: '练怎么把话说得让人愿意听完，以及怎么开一场对话。',
+    track: 'speech',
+    platform: 'YouTube',
+    href: 'https://www.youtube.com/@Charismaoncommand',
+    plays: '频道订阅约 676 万',
+  },
+]

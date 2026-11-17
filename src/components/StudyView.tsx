@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { COURSES } from '../catalog'
+import { COURSES } from '../studyCourses'
 import { matches } from '../format'
 import { readStudy, writeStudy, type StudyPrompt, type StudySave } from '../storage'
 import type { ShelfMark, StudyTrack } from '../types'

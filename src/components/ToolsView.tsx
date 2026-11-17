@@ -1,16 +1,30 @@
-import { useMemo, useState } from 'react'
-import { CHECKS, SNIPPETS } from '../catalog'
-import { matches, todayKey } from '../format'
+import { useState } from 'react'
+import { CHECKS } from '../catalog'
+import { todayKey } from '../format'
 import { readChecks, writeChecks } from '../storage'
-import { CopyButton } from './CopyButton'
+import type { DiscoverItem } from '../types'
+import { DiscoverPanel } from './DiscoverPanel'
 
-export function ToolsView({ query }: { query: string }) {
+type Props = {
+  query: string
+  items: DiscoverItem[]
+  discoverStatus: 'loading' | 'ready' | 'error'
+  discoverError: string
+  discoverStale: boolean
+  discoverFetchedAt: number | null
+  onDiscoverRefresh: () => void
+}
+
+export function ToolsView({
+  query,
+  items,
+  discoverStatus,
+  discoverError,
+  discoverStale,
+  discoverFetchedAt,
+  onDiscoverRefresh,
+}: Props) {
   const [checks, setChecks] = useState(readChecks)
-  const groups = useMemo(() => {
-    const visible = SNIPPETS.filter((item) => matches(query, item.group, item.title, item.note, item.command))
-    const names = [...new Set(visible.map((item) => item.group))]
-    return names.map((name) => ({ name, items: visible.filter((item) => item.group === name) }))
-  }, [query])
 
   const day = todayKey()
   const flags = checks.dayKey === day ? checks.flags : CHECKS.map(() => false)
@@ -42,33 +56,18 @@ export function ToolsView({ query }: { query: string }) {
           ))}
         </ul>
       </section>
-      <div className="stack">
-        {groups.length === 0 ? (
-          <section className="panel">
-            <p className="empty">没有符合「{query.trim()}」的命令。</p>
-          </section>
-        ) : (
-          groups.map((group) => (
-            <section key={group.name} className="panel">
-              <h2>{group.name}</h2>
-              <ul className="snippet-list">
-                {group.items.map((item) => (
-                  <li key={item.title}>
-                    <div className="snippet-head">
-                      <div>
-                        <h3>{item.title}</h3>
-                        <p className="meta">{item.note}</p>
-                      </div>
-                      <CopyButton text={item.command} />
-                    </div>
-                    <pre className="command">{item.command}</pre>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))
-        )}
-      </div>
+      <DiscoverPanel
+        title="新鲜工具仓"
+        sourceLine="GitHub / 视频里的 CLI 与开发者工具，按 star 与更新时间筛"
+        items={items}
+        query={query}
+        status={discoverStatus}
+        error={discoverError}
+        stale={discoverStale}
+        fetchedAt={discoverFetchedAt}
+        empty="没有符合的工具推荐。重新拉取或稍后再试。"
+        onRefresh={onDiscoverRefresh}
+      />
     </div>
   )
 }
